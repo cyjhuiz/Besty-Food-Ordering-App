@@ -1,0 +1,281 @@
+version: "3.8"
+
+volumes:
+  pgdata: 
+  kongadata:
+  rabbitmq_data:
+
+networks:
+  betsy-net:
+    driver: bridge
+
+services:
+    ###################################
+    # FoodAPI: The FoodAPI microservice
+    ###################################
+    FoodAPI:
+        build:
+          context: ./FoodService/
+          dockerfile: food.Dockerfile
+        image: glennng/food-api:ESD-Project
+        restart: always
+        networks:
+          - betsy-net
+        environment:
+          dbURL: mysql+mysqlconnector://betsydbadmin:betsydbpassword@betsydb.cabgeapjbvr7.us-east-1.rds.amazonaws.com/food
+          PYTHONUNBUFFERED: 1
+        ports:
+          - "5001:5001"
+        container_name: foodapi1
+
+    ####################################
+    # RabbitMQ: The messaging broker   
+    ####################################
+    rabbitmq:
+      image: rabbitmq:3-management
+      hostname: esd-rabbit
+      restart: always
+      networks:
+        - betsy-net
+      ports:
+        - "5672:5672"
+        - "15672:15672"
+      volumes: 
+        - rabbitmq_data:/var/lib/rabbitmq
+      
+
+    ###################################
+    # NotificationsAPI: The NotificationsAPI microservice
+    ###################################
+    NotificationAPI:
+      build:
+        context: ./NotificationsAPI/
+        dockerfile: notification.Dockerfile
+      image: glennng/notification-api:ESD-Project
+      restart: always
+      depends_on:
+        - rabbitmq
+      networks:
+        - betsy-net
+      environment:
+        rabbit_host: rabbitmq
+        rabbit_port: 5672
+        PYTHONUNBUFFERED: 1
+      ports:
+        - "5006:5006"
+      container_name: notificationapi1
+
+    ###################################
+    # PaymentsAPI: The PaymentsAPI microservice
+    ###################################
+    PaymentAPI:
+      build:
+        context: ./PaymentsAPI/
+        dockerfile: payment.Dockerfile
+      image: glennng/payment-api:ESD-Project
+      restart: always
+      networks:
+        - betsy-net
+      ports:
+        - "5005:5005"
+      container_name: paymentapi1
+
+    ###################################
+    # OrderAPI: The OrderAPI microservice
+    ###################################
+    OrderAPI:
+      build:
+        context: ./OrderAPI/
+        dockerfile: order.Dockerfile
+      image: glennng/order-api:ESD-Project
+      restart: always
+      networks:
+        - betsy-net
+      environment:
+        dbURL: mysql+mysqlconnector://betsydbadmin:betsydbpassword@betsydb.cabgeapjbvr7.us-east-1.rds.amazonaws.com/order
+        PYTHONUNBUFFERED: 1
+      ports:
+        - "5003:5003"
+      container_name: orderapi1
+
+    ###################################
+    # UserAPI: The UserAPI microservice
+    ###################################
+    UserAPI:
+      build:
+        context: ./UserService/
+        dockerfile: user.Dockerfile
+      image: glennng/user-api:ESD-Project
+      restart: always
+      networks:
+        - betsy-net
+      environment:
+        dbURL: mysql+mysqlconnector://betsydbadmin:betsydbpassword@betsydb.cabgeapjbvr7.us-east-1.rds.amazonaws.com/user
+        PYTHONUNBUFFERED: 1
+      ports:
+        - "5002:5002"
+      container_name: userapi1
+
+        
+    ###################################
+    # CreditAPI: The CreditAPI microservice
+    ###################################
+    CreditAPI:
+      build:
+        context: ./CreditAPI/
+        dockerfile: credit.Dockerfile
+      image: glennng/credit-api:ESD-Project
+      restart: always
+      networks:
+        - betsy-net
+      environment:
+        dbURL: mysql+mysqlconnector://betsydbadmin:betsydbpassword@betsydb.cabgeapjbvr7.us-east-1.rds.amazonaws.com/credit
+        PYTHONUNBUFFERED: 1
+      ports:
+        - "5004:5004"
+      container_name: creditapi1
+        
+    ###################################
+    # CancelOrderAPI: The CancelOrderAPI microservice
+    ###################################
+    CancelOrderAPI:
+      build:
+        context: ./cp_CancelOrderAPI/
+        dockerfile: cancelorder.Dockerfile
+      image: glennng/cancelorder-api:ESD-Project
+      restart: always
+      networks:
+        - betsy-net
+      depends_on: 
+        - rabbitmq
+        - FoodAPI
+        - NotificationAPI
+        - PaymentAPI
+        - OrderAPI
+        - UserAPI
+        - CreditAPI
+      environment:
+        rabbit_host: rabbitmq
+        rabbit_port: 5672
+        PYTHONUNBUFFERED: 1
+        food_URL: http://foodapi1:5001/food
+        user_URL: http://userapi1:5002/user
+        order_URL: http://orderapi1:5003/order
+        credit_URL: http://creditapi1:5004/credit
+        payment_URL: http://paymentapi1:5005/payment
+      ports:
+        - "5101:5101"
+      container_name: cancelorderapi1
+                
+    ###################################
+    # PlaceOrderAPI: The PlaceOrderAPI microservice
+    ###################################
+    PlaceOrderAPI:
+      build:
+        context: ./cp_PlaceOrderAPI/
+        dockerfile: place_order.Dockerfile
+      image: glennng/placeorder-api:ESD-Project
+      restart: always
+      networks:
+        - betsy-net
+      depends_on: 
+        - rabbitmq
+        - FoodAPI
+        - NotificationAPI
+        - PaymentAPI
+        - OrderAPI
+        - UserAPI
+        - CreditAPI
+      environment:
+        PYTHONUNBUFFERED: 1
+        rabbit_host: rabbitmq
+        rabbit_port: 5672
+        food_URL: http://foodapi1:5001/food
+        user_URL: http://userapi1:5002/user
+        order_URL: http://orderapi1:5003/order
+        credit_URL: http://creditapi1:5004/credit
+        payment_URL: http://paymentapi1:5005/payment
+      ports:
+        - "5102:5102"
+      container_name: placeorderapi1
+        
+    #######################################
+    # Postgres: The database used by Kong
+    #######################################
+    kong-database:
+      image: postgres:9.6
+      restart: always
+      networks:
+        - betsy-net
+      environment:
+        POSTGRES_DB: kong
+        POSTGRES_USER: kong
+        POSTGRES_PASSWORD: password
+      ports:
+        - "5432:5432"
+      healthcheck:
+        test: ["CMD", "pg_isready", "-U", "kong"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+      volumes:
+        - ./pgdata:/var/lib/postgresql/data
+
+    #######################################
+    # Kong database migration
+    #######################################
+    kong-migration:
+      image: kong:2.0.4
+      command: "kong migrations bootstrap"
+      restart: on-failure
+      networks:
+        - betsy-net
+      environment:
+        KONG_DATABASE: postgres
+        KONG_PG_HOST: kong-database
+        KONG_PG_USER: kong
+        KONG_PG_PASSWORD: password
+      depends_on:
+        - kong-database
+
+    #######################################
+    # Kong: The API Gateway
+    #######################################
+    kong:
+      image: kong:2.0.4
+      restart: always
+      networks:
+        - betsy-net
+      environment:
+        KONG_DATABASE: postgres
+        KONG_PG_HOST: kong-database
+        KONG_PG_USER: kong
+        KONG_PG_PASSWORD: password
+        KONG_PROXY_LISTEN: 0.0.0.0:8000
+        KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      depends_on:
+        - kong-migration
+      ports:
+        - "8000:8000"
+    
+    #######################################
+    # Konga: Kong GUI
+    #######################################
+    konga:
+      image: pantsel/konga
+      restart: always
+      networks:
+          - betsy-net
+      environment:
+        DB_ADAPTER: postgres
+        DB_HOST: kong-database
+        DB_USER: kong
+        DB_PASSWORD: password
+        DB_DATABASE: konga_db
+      depends_on:
+        - kong
+      ports:
+        - "1337:1337"
+      volumes:
+        - kongadata:/app/kongadata
+    
