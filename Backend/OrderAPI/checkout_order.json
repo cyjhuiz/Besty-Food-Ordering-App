@@ -1,0 +1,17 @@
+{
+    "UserId": 1,
+    "PaymentType": "TBank",
+    "orders":[{
+        "OrderItem": "Beef Bulgogi",
+        "FoodId": 1,
+        "ItemPrice": 10.50,
+        "ItemQuantity": 2
+    },
+    {
+        "OrderItem": "Coke",
+        "FoodId": 3,
+        "ItemPrice": 2.00,
+        "ItemQuantity": 2
+    }
+    ]
+}

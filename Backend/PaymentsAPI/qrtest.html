@@ -1,0 +1,39 @@
+<script src="./js/qrcode.js"></script>
+<script src="./js/jquery.min.js"></script>
+<div id="qrcode"></div>
+
+<script type="text/javascript">
+    //Set a default QRCODE and settings
+    var qrcode = new QRCode(document.getElementById("qrcode"), {
+        width: 512,
+        height: 512,
+        colorDark: "#791775",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+
+    //Setting header for QR code generator
+    var myHeaders = new Headers();
+    myHeaders.append("Content-Type", "application/x-www-form-urlencoded");
+
+    var urlencoded = new URLSearchParams();
+    //set the values here!
+    urlencoded.append("orderAmt", "50.99");
+    urlencoded.append("orderID", "6969");
+
+    var requestOptions = {
+        method: 'POST',
+        headers: myHeaders,
+        body: urlencoded,
+        redirect: 'follow'
+    };
+
+    fetch("http://localhost:3003/generatePaynow", requestOptions
+    ).then(response => response.json())
+        .then(data => {
+            //console.log(data)
+            //set the QR code
+            qrcode.makeCode(data.result);
+            console.log(data.result)
+        })
+</script>
